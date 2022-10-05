@@ -6,7 +6,7 @@ SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 768
 SCREEN_TITLE = "Click and Drag"
 
-
+#test
 # card parameters
 # Scaling component of card sizes
 CARD_SCALE = 0.6
@@ -35,7 +35,8 @@ CARD_VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
 CARD_SUITS = ["Clubs", "Hearts", "Spades", "Diamonds"]
 
 # face down image
-FACE_DOWN_IMAGE = "venv/Lib/site-packages/arcade/resources/images/cards/cardBack_red2.png"
+#FACE_DOWN_IMAGE = "venv/Lib/site-packages/arcade/resources/images/cards/cardBack_red2.png"
+FACE_DOWN_IMAGE = ":resources:images/cards/cardBack_red2.png"
 
 # how far from the top should the foundations be?
 TOP_Y = SCREEN_HEIGHT - MAT_HEIGHT/2 - MAT_HEIGHT*VERTICAL_MARGIN_PERCENT
@@ -71,7 +72,8 @@ class Card(arcade.Sprite):
         self.suit = suit
         self.value = value
 
-        self.image_file_name = f"venv/Lib/site-packages/arcade/resources/images/cards/card{self.value}{self.suit}.png"
+        #self.image_file_name = f"venv/Lib/site-packages/arcade/resources/images/cards/card{self.value}{self.suit}.png"
+        self.image_file_name = f":resources:images/cards/card{self.suit}{self.value}.png"
         self.is_face_up = False
 
         super().__init__(FACE_DOWN_IMAGE, scale, hit_box_algorithm="None")
@@ -133,7 +135,7 @@ class Game(arcade.Window):
         self.card_list = arcade.SpriteList()
         for suit in CARD_SUITS:
             for value in CARD_VALUES:
-                card = Card(suit, value, CARD_SCALE)
+                card = Card(value, suit, CARD_SCALE)
                 card.position = START_X, BOTTOM_Y  # put all cards at bottom left for now
                 self.card_list.append(card)
 
@@ -179,6 +181,7 @@ class Game(arcade.Window):
     def on_mouse_press(self, x, y, button, key_modifiers):
         # get list of cards at point where we clicked
         cards = arcade.get_sprites_at_point((x, y), self.card_list)
+
         # check if there were any
         if len(cards) > 0:
             # TODO: add functionality to check if selecting from Talon, and only move the selected card
@@ -231,12 +234,13 @@ class Game(arcade.Window):
                         card.position = self.pile_mat_list[STOCK].position
 
     def on_mouse_release(self, x, y, button, key_modifiers):
+
         # if no cards held, do nothing
         if len(self.held_cards) == 0:
             return
 
         # find the closest card to held card, and its pile
-        # TODO: alter to drop to pile by dropping on stack as well (currently only drops on mat)
+        # DONE: alter to drop to pile by dropping on stack as well (currently only drops on mat)
         pile, distance = arcade.get_closest_sprite(self.held_cards[0], self.pile_mat_list)
         reset_position = True
 
@@ -248,29 +252,88 @@ class Game(arcade.Window):
             if pile_index == self.get_pile_for_card(self.held_cards[0]):
                 # just return it to its old position
                 pass
+
             # is it on a tableau pile?
             elif TABLEAU_1 <= pile_index <= TABLEAU_7:
                 # are there other cards there?
                 if len(self.piles[pile_index]) > 0:
-                    # TODO: add validity checking here for tableau stacking
-                    # move card to proper position
-                    top_card = self.piles[pile_index][-1]
-                    for i, dropped_card in enumerate(self.held_cards):
-                        dropped_card.position = top_card.center_x, top_card.center_y - CARD_VERTICAL_OFFSET * (1+i)
-                    reset_position = False
+                    # DONE: add validity checking here for tableau stacking
+                    # what is the top card of the pile?
+                    top_card = self.piles[pile_index][len(self.piles[pile_index])-1]
+                    held_value = 0
+                    top_value = 0
+
+                    # what are the values of the pile and held cards?
+                    for valueIndex, value in enumerate(CARD_VALUES):
+                        if value == self.held_cards[0].value:
+                            held_value = valueIndex
+                        if value == top_card.value:
+                            top_value = valueIndex
+
+                    # is the held card black or red?
+                    if self.held_cards[0].suit == "Spades" or self.held_cards[0].suit == "Clubs":
+                        held_color = "Black"
+                    else:
+                        held_color = "Red"
+                    # is the pile card black or red?
+                    if top_card.suit == "Spades" or top_card.suit == "Clubs":
+                        top_color = "Black"
+                    else:
+                        top_color = "Red"
+
+                    # is the pile card one value higher than the held card?
+                    if top_value -1 == held_value:
+                        # is the pile card a different color than the held card?
+                        if held_color != top_color:
+
+                            # move card to proper position
+                            for i, dropped_card in enumerate(self.held_cards):
+                                dropped_card.position = top_card.center_x, top_card.center_y - CARD_VERTICAL_OFFSET * (1+i)
+                                reset_position = False
+                            for card in self.held_cards:
+                                self.move_card_to_pile(card, pile_index)
                 else:
-                    # TODO: add checking for kings
-                    for i, dropped_card in enumerate(self.held_cards):
-                        dropped_card.position = pile.center_x, pile.center_y - CARD_VERTICAL_OFFSET * i
-                    reset_position = False
-                for card in self.held_cards:
-                    self.move_card_to_pile(card, pile_index)
+                    # is the held card a king?
+                    # DONE: add checking for kings
+                    if self.held_cards[0].value == 'K':
+                        for i, dropped_card in enumerate(self.held_cards):
+                            dropped_card.position = pile.center_x, pile.center_y - CARD_VERTICAL_OFFSET * i
+                            reset_position = False
+                        for card in self.held_cards:
+                            self.move_card_to_pile(card, pile_index)
+
             # is it on a foundation pile, and is it only 1 card?
             elif FOUNDATION_1 <= pile_index <= FOUNDATION_4 and len(self.held_cards) == 1:
-                # TODO: add validity checking here for foundation (Ace and stacking)
-                self.held_cards[0].position = pile.position
-                self.move_card_to_pile(self.held_cards[0], pile_index)
-                reset_position = False
+
+                # are there other cards there?
+                if len(self.piles[pile_index]) > 0:
+
+                    # what is the top card of the pile?
+                    top_card = self.piles[pile_index][len(self.piles[pile_index]) - 1]
+                    held_value = 0
+                    top_value = 0
+
+                    # what are the values of the pile and held cards?
+                    for valueIndex, value in enumerate(CARD_VALUES):
+                        if value == self.held_cards[0].value:
+                            held_value = valueIndex
+                        if value == top_card.value:
+                            top_value = valueIndex
+
+                    # is the pile card one value lower than the held card?
+                    if top_value + 1 == held_value:
+                        # is the pile card the same suit as the held card?
+                        if self.held_cards[0].suit == top_card.suit:
+                            self.held_cards[0].position = pile.position
+                            self.move_card_to_pile(self.held_cards[0], pile_index)
+                            reset_position = False
+                else:
+                    # is the held card an A?
+                    # DONE: add validity checking here for foundation (Ace and stacking)
+                    if self.held_cards[0].value == 'A':
+                        self.held_cards[0].position = pile.position
+                        self.move_card_to_pile(self.held_cards[0], pile_index)
+                        reset_position = False
 
         # for invalid drops
         if reset_position:
