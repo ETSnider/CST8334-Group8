@@ -6,7 +6,7 @@ SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 768
 SCREEN_TITLE = "Click and Drag"
 
-#test
+# test
 # card parameters
 # Scaling component of card sizes
 CARD_SCALE = 0.6
@@ -35,8 +35,8 @@ CARD_VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
 CARD_SUITS = ["Clubs", "Hearts", "Spades", "Diamonds"]
 
 # face down image
-#FACE_DOWN_IMAGE = "venv/Lib/site-packages/arcade/resources/images/cards/cardBack_red2.png"
-FACE_DOWN_IMAGE = ":resources:images/cards/cardBack_red2.png"
+FACE_DOWN_IMAGE = "venv/Lib/site-packages/arcade/resources/images/cards/cardBack_red2.png"
+# FACE_DOWN_IMAGE = ":resources:images/cards/cardBack_red2.png"
 
 # how far from the top should the foundations be?
 TOP_Y = SCREEN_HEIGHT - MAT_HEIGHT/2 - MAT_HEIGHT*VERTICAL_MARGIN_PERCENT
@@ -66,14 +66,19 @@ FOUNDATION_2 = 10
 FOUNDATION_3 = 11
 FOUNDATION_4 = 12
 
+# standard(3) or Vegas(1)
+GAME_RULE = 3
+
+# keep track of vegas score between games
+VEGAS_SCORE = 0
 
 class Card(arcade.Sprite):
     def __init__(self, value, suit, scale):
         self.suit = suit
         self.value = value
 
-        #self.image_file_name = f"venv/Lib/site-packages/arcade/resources/images/cards/card{self.value}{self.suit}.png"
-        self.image_file_name = f":resources:images/cards/card{self.suit}{self.value}.png"
+        self.image_file_name = f"venv/Lib/site-packages/arcade/resources/images/cards/card{self.suit}{self.value}.png"
+        # self.image_file_name = f":resources:images/cards/card{self.suit}{self.value}.png"
         self.is_face_up = False
 
         super().__init__(FACE_DOWN_IMAGE, scale, hit_box_algorithm="None")
@@ -95,6 +100,34 @@ class Game(arcade.Window):
         # add startup stuff here
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
         arcade.set_background_color(arcade.color.AQUAMARINE)  # can change background color here
+        # timer stuff here
+        self.total_time = 0.0
+        self.timer_text = arcade.Text(
+            text="00:00",
+            start_x=SCREEN_WIDTH * 3 // 4,
+            start_y=TOP_Y,
+            color=arcade.color.BLACK,
+            font_size=70,
+            anchor_x="center",
+        )
+        self.score = 0
+        self.score_text = arcade.Text(
+            text="0",
+            start_x=SCREEN_WIDTH * 3 // 4,
+            start_y=BOTTOM_Y,
+            color=arcade.color.BLACK,
+            font_size=50,
+            anchor_x="center",
+        )
+        self.win = 0
+        self.win_text = arcade.Text(
+            text="0",
+            start_x=SCREEN_WIDTH * 2 // 4,
+            start_y=BOTTOM_Y,
+            color=arcade.color.BLACK,
+            font_size=50,
+            anchor_x="center",
+        )
         # sprite list of all cards
         self.card_list = None
         # sprite list of mats
@@ -107,8 +140,30 @@ class Game(arcade.Window):
         # and where they were taken from (in case they have to revert)
         self.held_cards_original_position = None
 
+    # DONE: Display winning screen
+    def winner(self):
+        # set up the win screen
+        minutes = int(self.total_time) // 60
+        seconds = int(self.total_time) % 60
+        # check if standard rule
+        if GAME_RULE == 3:
+            self.score += 700000 / ((minutes * 60) + seconds)
+        self.win = "YOU WIN!"
+
     def setup(self):
         # set up initial game, or restart game
+        # reset timer
+
+        self.win = ""
+        self.total_time = 0.0
+        # reset score for standard rules
+        if GAME_RULE == 3:
+            self.score = 0
+
+        # vegas rules starts at -52
+        if GAME_RULE == 1:
+            self.score = VEGAS_SCORE
+
         # declare foundations, tableau, stock and talon
         self.pile_mat_list = arcade.SpriteList()
         self.piles = [arcade.SpriteList() for _ in range(PILE_COUNT)]
@@ -177,6 +232,35 @@ class Game(arcade.Window):
         self.pile_mat_list.draw()
         # draw the cards
         self.card_list.draw()
+        # draw the timer text
+        self.timer_text.draw()
+        # draw the score text
+        self.score_text.draw()
+        # draw the win text
+        self.win_text.draw()
+
+    def on_update(self, delta_time):
+        # accumulate time
+        if self.win != "YOU WIN!":
+            self.total_time += delta_time
+            # alter the timer text
+            minutes = int(self.total_time) // 60
+            seconds = int(self.total_time) % 60
+
+            # is this standard rules?
+            if GAME_RULE == 3:
+                if seconds % 10 == 0 and seconds != 0:
+                    self.score -= (2/60)
+
+            self.timer_text.text = f"{minutes:02d}:{seconds:02d}"
+        self.score_text.text = f"{round(self.score)}"
+        self.win_text.text = f"{self.win}"
+
+        # DONE: check if victory
+        if len(self.piles[9]) != 0 and len(self.piles[10]) != 0 and len(self.piles[11]) != 0 and len(self.piles[12]) != 0:
+            if self.piles[9][-1].value == "K" and self.piles[10][-1].value == "K" and self.piles[11][-1].value == "K" and self.piles[12][-1].value == "K":
+                if self.win != "YOU WIN!":
+                    self.winner()
 
     def on_mouse_press(self, x, y, button, key_modifiers):
         # get list of cards at point where we clicked
@@ -184,12 +268,18 @@ class Game(arcade.Window):
 
         # check if there were any
         if len(cards) > 0:
-            # TODO: add functionality to check if selecting from Talon, and only move the selected card
+
             # get top card of stack
             primary_card = cards[-1]
             pile_index = self.get_pile_for_card(primary_card)
+
+            # DONE: add checking for right-click, and try to find a spot for that card in foundation, tableau
+            if pile_index != STOCK and button == arcade.MOUSE_BUTTON_RIGHT:
+                self.move_card(primary_card)
+                return
+
             if pile_index == STOCK:
-                for i in range(3):
+                for i in range(GAME_RULE):
                     if len(self.piles[STOCK]) == 0:
                         break
                     card = self.piles[STOCK][-1]
@@ -200,7 +290,7 @@ class Game(arcade.Window):
                     self.pull_to_top(card)
                 return
             # flip if face down
-            elif primary_card.is_face_down and primary_card == self.piles[pile_index][-1]:
+            elif primary_card.is_face_down() and primary_card == self.piles[pile_index][-1]:
                 primary_card.face_up()
             # add primary card to hand
             self.held_cards = [primary_card]
@@ -208,6 +298,7 @@ class Game(arcade.Window):
             self.held_cards_original_position = [self.held_cards[0].position]
             # and pull it to the top of the rendering order
             self.pull_to_top(self.held_cards[0])
+
             # is it a stack?
             card_index = self.piles[pile_index].index(primary_card)
             for i in range(card_index+1, len(self.piles[pile_index])):
@@ -222,16 +313,121 @@ class Game(arcade.Window):
             if len(mats) > 0:
                 mat = mats[0]
                 mat_index = self.pile_mat_list.index(mat)
-                # if it is an empty stock mat
-                if mat_index == STOCK and len(self.piles[STOCK]) == 0:
-                    temp_list = []
-                    for card in self.piles[TALON]:
-                        temp_list.append(card)
-                    for card in reversed(temp_list):
-                        card.face_down()
-                        self.piles[TALON].remove(card)
-                        self.piles[STOCK].append(card)
-                        card.position = self.pile_mat_list[STOCK].position
+                # if it is an empty stock mat and standard rules
+                if GAME_RULE == 3:
+                    if mat_index == STOCK and len(self.piles[STOCK]) == 0:
+                        self.score -= 20
+                        temp_list = []
+                        for card in self.piles[TALON]:
+                            temp_list.append(card)
+                        for card in reversed(temp_list):
+                            card.face_down()
+                            self.piles[TALON].remove(card)
+                            self.piles[STOCK].append(card)
+                            card.position = self.pile_mat_list[STOCK].position
+
+    def move_card(self, card):
+        global VEGAS_SCORE
+
+        # get card's current pile
+        curr_pile = self.get_pile_for_card(card)
+        # check if card is not on top
+        if self.piles[curr_pile][-1] != card:
+            return
+        # check if face down and flip if it is
+        if not card.is_face_up:
+            card.face_up()
+            # check if standard rule
+            if GAME_RULE == 3:
+                self.score += 5
+            return
+        for i in range(FOUNDATION_4, TABLEAU_1 - 1, -1):
+            # checking foundation
+            if i > 8:
+                # if ace
+                if card.value == "A":
+                    if len(self.piles[i]) == 0:
+                        card.set_position(self.pile_mat_list[i].center_x, self.pile_mat_list[i].center_y)
+                        self.pull_to_top(card)
+                        self.piles[i].append(card)
+                        self.piles[curr_pile].remove(card)
+                        # check if standard rule
+                        if GAME_RULE == 3:
+                            self.score += 10
+                        # check if vegas rules
+                        if GAME_RULE == 1:
+                            self.score += 3
+                            VEGAS_SCORE += 3
+                            return VEGAS_SCORE
+                        return
+                    else:
+                        continue
+                if len(self.piles[i]) == 0:
+                    continue
+                # what are the values of the pile and held cards?
+                for valueIndex, value in enumerate(CARD_VALUES):
+                    if value == card.value:
+                        card_value = valueIndex
+                    if value == self.piles[i][len(self.piles[i])-1].value:
+                        top_value = valueIndex
+                # if not ace
+                if top_value == card_value - 1 and self.piles[i][-1].suit == card.suit:
+                    card.set_position(self.piles[i][0].center_x, self.piles[i][0].center_y)
+                    self.pull_to_top(card)
+                    self.piles[i].append(card)
+                    self.piles[curr_pile].remove(card)
+                    # check if standard rule
+                    if GAME_RULE == 3:
+                        self.score += 10
+                    # check if vegas rules
+                    if GAME_RULE == 1:
+                        self.score += 3
+                        VEGAS_SCORE += 3
+                        return VEGAS_SCORE
+                    return
+            # checking tableau
+            else:
+                # if king
+                if card.value == "K":
+                    if len(self.piles[i]) == 0:
+                        card.set_position(self.pile_mat_list[i].center_x, self.pile_mat_list[i].center_y)
+                        self.pull_to_top(card)
+                        self.piles[i].append(card)
+                        self.piles[curr_pile].remove(card)
+                        # check if standard rule
+                        if GAME_RULE == 3:
+                            self.score += 5
+                        return
+                    else:
+                        continue
+                if len(self.piles[i]) == 0:
+                    continue
+                # what are the values of the pile and held cards?
+                for valueIndex, value in enumerate(CARD_VALUES):
+                    if value == card.value:
+                        card_value = valueIndex
+                    if value == self.piles[i][len(self.piles[i])-1].value:
+                        top_value = valueIndex
+                # are the cards black or red?
+                if card.suit == "Spades" or card.suit == "Clubs":
+                    card_color = "Black"
+                else:
+                    card_color = "Red"
+                # is the pile card black or red?
+                if self.piles[i][len(self.piles[i]) - 1].suit == "Spades" or self.piles[i][len(self.piles[i])-1].suit == "Clubs":
+                    top_color = "Black"
+                else:
+                    top_color = "Red"
+                # if not king
+                if card_value == top_value - 1 and card_color != top_color:
+                    card.set_position(self.piles[i][0].center_x, self.piles[i][0].center_y - (len(self.piles[i]))*CARD_VERTICAL_OFFSET)
+                    self.pull_to_top(card)
+                    self.piles[i].append(card)
+                    self.piles[curr_pile].remove(card)
+                    # check if standard rule
+                    if GAME_RULE == 3:
+                        self.score += 5
+                    return
 
     def on_mouse_release(self, x, y, button, key_modifiers):
 
@@ -282,7 +478,7 @@ class Game(arcade.Window):
                         top_color = "Red"
 
                     # is the pile card one value higher than the held card?
-                    if top_value -1 == held_value:
+                    if top_value - 1 == held_value:
                         # is the pile card a different color than the held card?
                         if held_color != top_color:
 
@@ -292,6 +488,10 @@ class Game(arcade.Window):
                                 reset_position = False
                             for card in self.held_cards:
                                 self.move_card_to_pile(card, pile_index)
+                                # check if standard rule
+                                if GAME_RULE == 3:
+                                    self.score += 5 / len(self.held_cards)
+
                 else:
                     # is the held card a king?
                     # DONE: add checking for kings
@@ -301,6 +501,9 @@ class Game(arcade.Window):
                             reset_position = False
                         for card in self.held_cards:
                             self.move_card_to_pile(card, pile_index)
+                            # check if standard rule
+                            if GAME_RULE == 3:
+                                self.score += 5 / len(self.held_cards)
 
             # is it on a foundation pile, and is it only 1 card?
             elif FOUNDATION_1 <= pile_index <= FOUNDATION_4 and len(self.held_cards) == 1:
@@ -326,6 +529,9 @@ class Game(arcade.Window):
                         if self.held_cards[0].suit == top_card.suit:
                             self.held_cards[0].position = pile.position
                             self.move_card_to_pile(self.held_cards[0], pile_index)
+                            # check if standard rule
+                            if GAME_RULE == 3:
+                                self.score += 10
                             reset_position = False
                 else:
                     # is the held card an A?
@@ -333,6 +539,9 @@ class Game(arcade.Window):
                     if self.held_cards[0].value == 'A':
                         self.held_cards[0].position = pile.position
                         self.move_card_to_pile(self.held_cards[0], pile_index)
+                        # check if standard rule
+                        if GAME_RULE == 3:
+                            self.score += 10
                         reset_position = False
 
         # for invalid drops
@@ -371,9 +580,20 @@ class Game(arcade.Window):
         self.piles[pile_index].append(card)
 
     def on_key_press(self, symbol: int, modifiers: int):
+        global GAME_RULE
+        global VEGAS_SCORE
         # let player reset with r
         if symbol == arcade.key.R:
+            GAME_RULE = 3
+            VEGAS_SCORE = 0
             self.setup()
+            return GAME_RULE, VEGAS_SCORE
+        # DONE: let the player play vegas rules with v
+        if symbol == arcade.key.V:
+            GAME_RULE = 1
+            VEGAS_SCORE -= 52
+            self.setup()
+            return GAME_RULE, VEGAS_SCORE
 
 
 def main():
