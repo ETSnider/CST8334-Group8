@@ -119,6 +119,7 @@ class Game(arcade.Window):
             font_size=50,
             anchor_x="center",
         )
+
         self.win = 0
         self.win_text = arcade.Text(
             text="0",
@@ -128,6 +129,7 @@ class Game(arcade.Window):
             font_size=50,
             anchor_x="center",
         )
+
         # sprite list of all cards
         self.card_list = None
         # sprite list of mats
@@ -154,6 +156,7 @@ class Game(arcade.Window):
         # set up initial game, or restart game
         # reset timer
 
+
         self.win = ""
         self.total_time = 0.0
         # reset score for standard rules
@@ -163,6 +166,7 @@ class Game(arcade.Window):
         # vegas rules starts at -52
         if GAME_RULE == 1:
             self.score = VEGAS_SCORE
+
 
         # declare foundations, tableau, stock and talon
         self.pile_mat_list = arcade.SpriteList()
@@ -262,12 +266,18 @@ class Game(arcade.Window):
                 if self.win != "YOU WIN!":
                     self.winner()
 
+
     def on_mouse_press(self, x, y, button, key_modifiers):
         # get list of cards at point where we clicked
         cards = arcade.get_sprites_at_point((x, y), self.card_list)
 
         # check if there were any
         if len(cards) > 0:
+
+            # get top card of stack
+            primary_card = cards[-1]
+            pile_index = self.get_pile_for_card(primary_card)
+
 
             # get top card of stack
             primary_card = cards[-1]
@@ -427,6 +437,82 @@ class Game(arcade.Window):
                     # check if standard rule
                     if GAME_RULE == 3:
                         self.score += 5
+                    return
+
+    def move_card(self, card):
+        # get card's current pile
+        curr_pile = self.get_pile_for_card(card)
+        # check if card is not on top
+        if self.piles[curr_pile][-1] != card:
+            return
+        # check if face down and flip if it is
+        if not card.is_face_up:
+            card.face_up()
+            return
+        for i in range(FOUNDATION_4, TABLEAU_1 - 1, -1):
+            # checking foundation
+            if i > 8:
+                # if ace
+                if card.value == "A":
+                    if len(self.piles[i]) == 0:
+                        card.set_position(self.pile_mat_list[i].center_x, self.pile_mat_list[i].center_y)
+                        self.pull_to_top(card)
+                        self.piles[i].append(card)
+                        self.piles[curr_pile].remove(card)
+                        return
+                    else:
+                        continue
+                if len(self.piles[i]) == 0:
+                    continue
+                # what are the values of the pile and held cards?
+                for valueIndex, value in enumerate(CARD_VALUES):
+                    if value == card.value:
+                        card_value = valueIndex
+                    if value == self.piles[i][len(self.piles[i])-1].value:
+                        top_value = valueIndex
+                # if not ace
+                if top_value == card_value - 1 and self.piles[i][-1].suit == card.suit:
+                    card.set_position(self.piles[i][0].center_x, self.piles[i][0].center_y)
+                    self.pull_to_top(card)
+                    self.piles[i].append(card)
+                    self.piles[curr_pile].remove(card)
+                    return
+            # checking tableau
+            else:
+                # if king
+                if card.value == "K":
+                    if len(self.piles[i]) == 0:
+                        card.set_position(self.pile_mat_list[i].center_x, self.pile_mat_list[i].center_y)
+                        self.pull_to_top(card)
+                        self.piles[i].append(card)
+                        self.piles[curr_pile].remove(card)
+                        return
+                    else:
+                        continue
+                if len(self.piles[i]) == 0:
+                    continue
+                # what are the values of the pile and held cards?
+                for valueIndex, value in enumerate(CARD_VALUES):
+                    if value == card.value:
+                        card_value = valueIndex
+                    if value == self.piles[i][len(self.piles[i])-1].value:
+                        top_value = valueIndex
+                # are the cards black or red?
+                if card.suit == "Spades" or card.suit == "Clubs":
+                    card_color = "Black"
+                else:
+                    card_color = "Red"
+                # is the pile card black or red?
+                if self.piles[i][len(self.piles[i]) - 1].suit == "Spades" or self.piles[i][len(self.piles[i])-1].suit == "Clubs":
+                    top_color = "Black"
+                else:
+                    top_color = "Red"
+                # if not king
+                if card_value == top_value - 1 and card_color != top_color:
+                    card.set_position(self.piles[i][0].center_x, self.piles[i][0].center_y - (len(self.piles[i]))*CARD_VERTICAL_OFFSET)
+                    self.pull_to_top(card)
+                    self.piles[i].append(card)
+                    self.piles[curr_pile].remove(card)
                     return
 
     def on_mouse_release(self, x, y, button, key_modifiers):
